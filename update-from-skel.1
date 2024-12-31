@@ -1,0 +1,35 @@
+.TH DITANA-UPDATE-FROM-SKEL 1 "October 2024" "Ditana GNU/Linux" "User Commands"
+.SH NAME
+ditana-update-from-skel \- update user’s home directory from /etc/skel
+.SH SYNOPSIS
+.B ditana-update-from-skel
+.SH DESCRIPTION
+.B ditana-update-from-skel
+is a Ditana-specific script designed to selectively update a user’s home directory with files from /etc/skel. It is primarily intended for development and testing purposes.
+.PP
+The script compares the contents of /etc/skel with the user’s home directory, identifies new and changed files, and allows the user to review and apply these changes. It includes safeguards to prevent overwriting files that have been modified by the user since the Ditana installation.
+.SH WARNING
+This script is intended for expert use only. While it includes measures to prevent data loss, the generic copying from /etc/skel should be approached with caution. It is primarily designed for testing and development of Arch packages that install files to /etc/skel.
+.SH OPTIONS
+This script does not take any command-line options. All interactions are handled through prompts during execution.
+.SH EXAMPLES
+To run the script:
+.PP
+.nf
+.RS
+/usr/bin/update-from-skel
+.RE
+.fi
+.PP
+The script will guide you through the process, showing which files will be updated or added, and giving you the option to compare changes before applying them.
+.SH SEE ALSO
+For more information on Arch package guidelines and best practices for managing user home directories, see:
+.PP
+https://wiki.archlinux.org/title/Arch_package_guidelines
+.SH AUTHOR
+Written by Written by Stefan Zipproth <s.zipproth@acrion.ch>
+.SH BUGS
+Report bugs to <https://github.com/acrion/ditana-update-from-skel/issues>
+.SH COPYRIGHT
+Copyright \(co 2024 acrion innovations GmbH. License AGPLv3+: GNU AGPL version 3 or later <https://www.gnu.org/licenses/agpl-3.0.html>.
+This is free software: you are free to change and redistribute it. There is NO WARRANTY, to the extent permitted by law.

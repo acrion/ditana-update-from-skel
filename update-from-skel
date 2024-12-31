@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2024, 2025 acrion innovations GmbH
+# Authors: Stefan Zipproth, s.zipproth@acrion.ch
+#
+# This file is part of ditana-update-from-skel, see https://github.com/acrion/ditana-update-from-skel
+#
+# ditana-update-from-skel is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# ditana-update-from-skel is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with ditana-update-from-skel. If not, see <https://www.gnu.org/licenses/>.
+
+set -e
+
+get_reference_timestamp() {
+    mtime_securetty=$(stat -c %Y /etc/securetty 2>/dev/null)
+    btime_root=$(stat -c %W / 2>/dev/null)
+
+    if [[ -z "$mtime_securetty" && ( -z "$btime_root" || "$btime_root" == "-1" ) ]]; then
+        exit 1
+    fi
+
+    if [[ -z "$btime_root" || "$btime_root" == "-1" ]]; then
+        btime_root=""
+    fi
+
+    if [[ -z "$mtime_securetty" ]]; then
+        echo "$btime_root"
+    elif [[ -z "$btime_root" ]]; then
+        echo "$mtime_securetty"
+    else
+        if (( mtime_securetty < btime_root )); then
+            echo "$mtime_securetty"
+        else
+            echo "$btime_root"
+        fi
+    fi
+}
+
+cleanup() {
+    echo "Cleaning up..."
+    rm -rf "$tmpdir"
+}
+
+tmpdir=$(mktemp -d)
+trap cleanup EXIT
+
+echo "Copying files from /etc/skel to $tmpdir..."
+sudo cp -r /etc/skel/. "$tmpdir"
+
+echo "Changing ownership of copied files to current user..."
+sudo chown -R "$USER:$USER" "$tmpdir"
+
+reference_timestamp=$(get_reference_timestamp)
+
+find "$tmpdir" -exec touch -d "@$reference_timestamp" {} +
+
+rm -f "$tmpdir/.bashrc_ditana"
+rm -f "$tmpdir/.config/autostart/initialize-system.desktop"
+rm -f "$tmpdir/.config/ditana/trigger-first-login"
+
+# Deleting files that were overriden after system install
+rm -f "$tmpdir/.bashrc"
+
+echo "Comparing files in $tmpdir with your home directory..."
+changed_files=$(diff -rq "$tmpdir" "$HOME" | grep " differ" | sed -E "s|Files ($tmpdir/.*) and .* differ|\1|")
+new_files=$(find "$tmpdir" -type f | sed "s|$tmpdir/||" | while read -r file; do
+    if [[ ! -f "$HOME/$file" ]]; then
+        echo "$file"
+    fi
+done)
+
+echo "The following files will not be replaced, because they have been changed after installing Ditana:"
+files_that_will_be_replaced=()
+files_that_will_not_be_replaced=()
+
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue
+    home_file="${HOME}/${file#$tmpdir/}"
+    if [[ -f "$home_file" ]]; then
+        mtime_home_file=$(stat -c %Y "$home_file")
+        if (( mtime_home_file > reference_timestamp )); then
+            files_that_will_not_be_replaced+=("${file#$tmpdir/}")
+        else
+            files_that_will_be_replaced+=("$file")
+        fi
+    else
+        files_that_will_be_replaced+=("$file")
+    fi
+done <<< "$changed_files"
+
+if [[ ${#files_that_will_not_be_replaced[@]} -gt 0 ]]; then
+    printf '%s\n' "${files_that_will_not_be_replaced[@]}"
+fi
+
+echo
+
+if [[ ${#files_that_will_be_replaced[@]} -eq 0 && -z "$new_files" ]]; then
+    echo "No changes detected."
+    exit 0
+fi
+
+if [[ -n "$new_files" ]]; then
+    echo "The following files do not exist yet in your home directory and will be copied:"
+    echo "$new_files"
+fi
+
+if [[ ${#files_that_will_be_replaced[@]} -gt 0 ]]; then
+    echo "The following files have been changed and will override the versions in your home directory:"
+    printf '%s\n' "${files_that_will_be_replaced[@]}" | sed "s|$tmpdir/||"
+
+    read -p "Would you like to compare the changed files? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        for file in "${files_that_will_be_replaced[@]}"; do
+            diff "$file" "${HOME}/${file#$tmpdir/}"
+        done
+    fi
+fi
+
+read -p "Do you want to proceed? (y/n) " -n 1 -r
+echo
+if [[ $REPLY =~ ^[Yy]$ ]]
+then
+    echo "Copying changed and new files to your home directory..."
+    for file in "${files_that_will_be_replaced[@]}"; do
+        cp "$file" "${HOME}/${file#$tmpdir/}"
+    done
+    echo "$new_files" | while IFS= read -r file; do
+        if [[ -n "$file" ]]; then
+            target_dir=$(dirname "$HOME/$file")
+            mkdir -p "$target_dir"
+            cp "$tmpdir/$file" "$HOME/$file"
+        fi
+    done
+    echo "Update completed."
+else
+    echo "Operation cancelled."
+fi

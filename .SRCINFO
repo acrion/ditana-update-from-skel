@@ -1,0 +1,14 @@
+pkgbase = ditana-update-from-skel
+	pkgdesc = Ditana script to copy updated files from /etc/skel to the current user’s home directory
+	pkgver = 1.06
+	pkgrel = 1
+	url = https://ditana.org
+	arch = any
+	license = AGPL-3.0-or-later
+	depends = diffutils
+	source = update-from-skel
+	source = update-from-skel.1
+	sha256sums = SKIP
+	sha256sums = SKIP
+
+pkgname = ditana-update-from-skel
